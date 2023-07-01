@@ -1,0 +1,101 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import itertools as it
+from scipy.stats import spearmanr
+from sklearn.linear_model import LinearRegression
+from sklearn.feature_selection import mutual_info_regression as mir
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.preprocessing import OneHotEncoder as onehot
+from sklearn import linear_model
+from sklearn.cluster import KMeans
+from sklearn.neural_network import MLPRegressor
+from sklearn.decomposition import PCA
+import xgboost as xgb
+import lightgbm as lgb
+
+# fill nan values with median, drop day_id
+def basic_clean(data):
+    df = data.copy().drop('DAY_ID', axis=1)
+    return df.fillna(df.median(numeric_only=True))
+
+# factorize country column
+def enum_country(data):
+    df = data.copy()
+    df['COUNTRY'] = df['COUNTRY'].factorize()[0]
+    return df
+
+# transforms wind forecasts into right dimensions (reasoning is that wind forecasts would represent net flow of volume, while
+# wind turbines roughly generate energy based on area, so we cube root wind and then square it)
+def make_wind_sqcb(data):
+    df = data.copy()
+    df['DE_WIND_SQCB'] = (df['DE_WIND'] - df['DE_WIND'].min()).pow(2.0/3.0)
+    df['FR_WIND_SQCB'] = (df['FR_WIND'] - df['FR_WIND'].min()).pow(2.0/3.0)
+    return df
+
+# determines over- or underproduction of wind power based on forecasts
+# def wind_sd = ()
+
+# pretty sure the country column represents the country whose electricity future we're looking at, so we have to flip the sign of some things,
+# and take import/export based on country—make sure to use this before one hot encoding country / converting to 0/1
+
+def country_flow(data):
+    df = data.copy()
+    df['EXCHANGE'] = np.where(df['COUNTRY'] == 'DE', df['DE_FR_EXCHANGE'], df['FR_DE_EXCHANGE'])
+    df['SELF_EXPORT'] = np.where(df['COUNTRY'] == 'DE', df['DE_NET_EXPORT'], df['FR_NET_EXPORT'])
+    df['OTHER_EXPORT'] = np.where(df['COUNTRY'] == 'DE', df['FR_NET_EXPORT'], df['DE_NET_EXPORT'])
+    df['SELF_CONSUMPTION'] = np.where(df['COUNTRY'] == 'DE', df['DE_CONSUMPTION'], df['FR_CONSUMPTION'])
+    df['OTHER_CONSUMPTION'] = np.where(df['COUNTRY'] == 'DE', df['FR_CONSUMPTION'], df['DE_CONSUMPTION'])
+    df = df.drop(['DE_CONSUMPTION', 'FR_CONSUMPTION', 'DE_FR_EXCHANGE', 'FR_DE_EXCHANGE', 'DE_NET_EXPORT', 'DE_NET_IMPORT', 'FR_NET_EXPORT', 'FR_NET_IMPORT'], axis=1)
+    return df
+
+# for fitting two part linear regression to WIND_SQCB / WINDPOW to determine excess production
+# in general, given two series and a threshold (boolean) function, the fn will split the the x and y values
+# based on the function and then do ols on each side, returning a new series with the residual
+# of each y-value from the fitted line
+
+def lr_sd(lr, x, y):
+    return (y - lr.predict(x)).pow(2).sum() / y.size
+
+class SDLinReg:
+    def __init__(self):
+        return None
+    
+    def fit(self, d, x, y, f=None):
+        self.x = x
+        self.y = y
+        data = d[[x, y]].copy()
+        if f is None:
+            d1 = data
+            lr1 = LinearRegression()
+            lr1.fit(d1[x].values.reshape(-1, 1), d1[y])
+            sd1 = lr_sd(lr1, d1[[x]], d1[y])
+            self.p = lambda r : (r[1] - lr1.predict([[r[0]]])) / sd1
+        else:
+            d1, d2 = data[f(data[x], data[y])], data[~ f(data[x], data[y])]
+            lr1, lr2 = LinearRegression(), LinearRegression()
+            lr1.fit(d1[x].values.reshape(-1, 1), d1[y])
+            lr2.fit(d2[x].values.reshape(-1, 1), d2[y])
+            sd1, sd2 = lr_sd(lr1, d1[[x]], d1[y]), lr_sd(lr2, d2[[x]], d2[y])
+            self.p = lambda r : ((r[1] - lr1.predict([[r[0]]])) / sd1) if f(r[0], r[1]) else ((r[1] - lr2.predict([[r[0]]])) / sd2)
+        return
+
+    def predict(self, d, x=None, y=None, debug=False):
+        if x is None:
+            x = self.x
+        if y is None:
+            y = self.y
+        data = d[[x, y]]
+        if debug:
+            i = 0
+            for row in data.itertuples(index=False):
+                print("row:", row)
+                print("p(row):", self.p(row))
+                print("float:", float(self.p(row)))
+                i += 1
+                if i > 20:
+                    break
+        return pd.Series([float(self.p(row)) for row in data.itertuples(index=False)], index=d.index)
