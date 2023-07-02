@@ -24,14 +24,16 @@ def metric_train(output, test):
 # call whenever testing models
 def test_model(model, x_train, x_test, y_train, y_test):
 	model.fit(x_train, y_train)
-	print('fit on test set: {:.1f}%'.format(100 * metric_train(model.predict(x_test), y_test)))
+	output = model.predict(x_test)
+	print('fit on test set: {:.1f}%'.format(100 * metric_train(output, y_test)))
 	print('fit on training set: {:.1f}%'.format(100 * metric_train(model.predict(x_train), y_train)))
 	print('')
+	return output
 
 def kf_test_model(kf, model, x, y):
-	df = x.copy()
-	for (train, test) in kf.split(df):
-		test_model(model, df.loc[train], df.loc[test], y.loc[train], y.loc[test])
+	for (train, test) in kf.split(x):
+		df = make_wind_excess(x, train)
+		test_model(model, df.iloc[train], df.iloc[test], y.iloc[train], y.iloc[test])
 
 # fill nan values with median, drop day_id
 def basic_clean(data):
@@ -53,12 +55,13 @@ def make_wind_sqcb(data):
     return df
 
 # determines over- or underproduction of wind power based on forecasts
-def make_wind_excess(data, train_idx, wind='WIND_SQCB', de_threshold=1.5, fr_threshold=1.5, drop_windpow=True):
+def make_wind_excess(data, train_idx, wind='WIND_SQCB', de_threshold=1.5, fr_threshold=1.5, drop_windpow=True, use_iloc=True):
 	df = data.copy()
+	x = df.iloc[train_idx] if use_iloc else df.loc[train_idx]
 	lr = SDLinReg()
-	lr.fit(df.loc[train_idx], 'DE_' + wind, 'DE_WINDPOW', lambda x, y : x > de_threshold)
+	lr.fit(x.copy(), 'DE_' + wind, 'DE_WINDPOW', lambda x, y : x > de_threshold)
 	df['DE_WIND_EXCESS'] = lr.predict(df)
-	lr.fit(df.loc[train_idx], 'FR_' + wind, 'FR_WINDPOW', lambda x, y : x > fr_threshold)
+	lr.fit(x.copy(), 'FR_' + wind, 'FR_WINDPOW', lambda x, y : x > fr_threshold)
 	df['FR_WIND_EXCESS'] = lr.predict(df)
 	if drop_windpow:
 		df = df.drop(['DE_WINDPOW', 'FR_WINDPOW'], axis=1)
@@ -77,6 +80,11 @@ def country_flow(data):
     df['OTHER_CONSUMPTION'] = np.where(df['COUNTRY'] == 'DE', df['FR_CONSUMPTION'], df['DE_CONSUMPTION'])
     df = df.drop(['DE_CONSUMPTION', 'FR_CONSUMPTION', 'DE_FR_EXCHANGE', 'FR_DE_EXCHANGE', 'DE_NET_EXPORT', 'DE_NET_IMPORT', 'FR_NET_EXPORT', 'FR_NET_IMPORT'], axis=1)
     return df
+
+def normalize_ret(data):
+	df = data.copy()
+	norm_cols = ['GAS_RET', 'COAL_RET', 'CARBON_RET']
+	return (d[norm_cols] - d[norm_cols].mean()) / d[norm_cols].std()
 
 # for fitting two part linear regression to WIND_SQCB / WINDPOW to determine excess production
 # in general, given two series and a threshold (boolean) function, the fn will split the the x and y values
