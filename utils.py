@@ -16,6 +16,9 @@ from sklearn.neural_network import MLPRegressor
 from sklearn.decomposition import PCA
 import xgboost as xgb
 import lightgbm as lgb
+from itertools import product
+
+COUNTRIES = ['DE', 'FR']
 
 def make_features(data):
 	df = data.copy()
@@ -91,7 +94,10 @@ def normalize_ret(data):
 
 def fuel_cost(data):
 	df = data.copy()
-	ls = ['GAS', 'COAL', 'CARBON']
+	ls = ['GAS', 'COAL']
+	for country, fuel in product(COUNTRIES, ls):
+		df[f'{country}_{fuel}_COST'] = df[f'{country}_{fuel}'].multiply(df[f'{fuel}_RET'])
+	return df
 
 # for fitting two part linear regression to WIND_SQCB / WINDPOW to determine excess production
 # in general, given two series and a threshold (boolean) function, the fn will split the the x and y values
@@ -100,7 +106,7 @@ def fuel_cost(data):
 
 def lr_sd(lr, x, y):
     return (y - lr.predict(x)).pow(2).sum() / y.size
-
+  
 class SDLinReg:
     def __init__(self):
         return None
