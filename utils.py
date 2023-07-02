@@ -17,6 +17,17 @@ from sklearn.decomposition import PCA
 import xgboost as xgb
 import lightgbm as lgb
 
+# training metric
+def metric_train(output, test):
+    return  spearmanr(output, test).correlation
+
+# call whenever testing models
+def test_model(model, x_train, x_test, y_train, y_test):
+	model.fit(x_train, y_train)
+	print('fit on test set: {:.1f}%'.format(100 * metric_train(model.predict(x_test), y_test)))
+	print('fit on training set: {:.1f}%'.format(100 * metric_train(model.predict(x_train), y_train)))
+	print('')
+
 # fill nan values with median, drop day_id
 def basic_clean(data):
     df = data.copy().drop('DAY_ID', axis=1)
