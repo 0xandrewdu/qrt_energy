@@ -28,6 +28,11 @@ def test_model(model, x_train, x_test, y_train, y_test):
 	print('fit on training set: {:.1f}%'.format(100 * metric_train(model.predict(x_train), y_train)))
 	print('')
 
+def kf_test_model(kf, model, x, y):
+	df = x.copy()
+	for (train, test) in kf.split(df):
+		test_model(model, df.loc[train], df.loc[test], y.loc[train], y.loc[test])
+
 # fill nan values with median, drop day_id
 def basic_clean(data):
     df = data.copy().drop('DAY_ID', axis=1)
@@ -48,7 +53,17 @@ def make_wind_sqcb(data):
     return df
 
 # determines over- or underproduction of wind power based on forecasts
-# def wind_sd = ()
+def make_wind_excess(data, train_idx, wind='DE_WIND_SQCB', de_threshold=1.5, fr_threshold=1.5, drop_windpow=True):
+	df = data.copy()
+	lr = SDLinReg()
+	lr.fit(df.loc[train_idx], wind, 'DE_WINDPOW', lambda x, y : x > de_threshold)
+	df['DE_WIND_EXCESS'] = lr.predict(df)
+	lr.fit(df.loc[train_idx], wind, 'FR_WINDPOW', lambda x, y : x > de_threshold)
+	df['FR_WIND_EXCESS'] = lr.predict(df)
+	if drop_windpow:
+		df = df.drop(['DE_WINDPOW', 'FR_WINDPOW'], axis=1)
+	return df
+
 
 # pretty sure the country column represents the country whose electricity future we're looking at, so we have to flip the sign of some things,
 # and take import/export based on country—make sure to use this before one hot encoding country / converting to 0/1
