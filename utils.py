@@ -17,6 +17,10 @@ from sklearn.decomposition import PCA
 import xgboost as xgb
 import lightgbm as lgb
 
+def make_features(data):
+	df = data.copy()
+	df = basic_clean(df)
+
 # training metric
 def metric_train(output, test):
     return  spearmanr(output, test).correlation
@@ -28,7 +32,6 @@ def test_model(model, x_train, x_test, y_train, y_test):
 	print('fit on test set: {:.1f}%'.format(100 * metric_train(output, y_test)))
 	print('fit on training set: {:.1f}%'.format(100 * metric_train(model.predict(x_train), y_train)))
 	print('')
-	return output
 
 def kf_test_model(kf, model, x, y):
 	for (train, test) in kf.split(x):
@@ -85,6 +88,10 @@ def normalize_ret(data):
 	df = data.copy()
 	norm_cols = ['GAS_RET', 'COAL_RET', 'CARBON_RET']
 	return (d[norm_cols] - d[norm_cols].mean()) / d[norm_cols].std()
+
+def fuel_cost(data):
+	df = data.copy()
+	ls = ['GAS', 'COAL', 'CARBON']
 
 # for fitting two part linear regression to WIND_SQCB / WINDPOW to determine excess production
 # in general, given two series and a threshold (boolean) function, the fn will split the the x and y values
