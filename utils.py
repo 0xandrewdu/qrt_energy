@@ -53,12 +53,12 @@ def make_wind_sqcb(data):
     return df
 
 # determines over- or underproduction of wind power based on forecasts
-def make_wind_excess(data, train_idx, wind='DE_WIND_SQCB', de_threshold=1.5, fr_threshold=1.5, drop_windpow=True):
+def make_wind_excess(data, train_idx, wind='WIND_SQCB', de_threshold=1.5, fr_threshold=1.5, drop_windpow=True):
 	df = data.copy()
 	lr = SDLinReg()
-	lr.fit(df.loc[train_idx], wind, 'DE_WINDPOW', lambda x, y : x > de_threshold)
+	lr.fit(df.loc[train_idx], 'DE_' + wind, 'DE_WINDPOW', lambda x, y : x > de_threshold)
 	df['DE_WIND_EXCESS'] = lr.predict(df)
-	lr.fit(df.loc[train_idx], wind, 'FR_WINDPOW', lambda x, y : x > de_threshold)
+	lr.fit(df.loc[train_idx], 'FR_' + wind, 'FR_WINDPOW', lambda x, y : x > fr_threshold)
 	df['FR_WIND_EXCESS'] = lr.predict(df)
 	if drop_windpow:
 		df = df.drop(['DE_WINDPOW', 'FR_WINDPOW'], axis=1)
