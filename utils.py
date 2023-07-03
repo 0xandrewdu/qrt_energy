@@ -29,12 +29,14 @@ def metric_train(output, test):
     return  spearmanr(output, test).correlation
 
 # call whenever testing models
-def test_model(model, x_train, x_test, y_train, y_test):
+def test_model(model, x_train, x_test, y_train, y_test, debug=False):
 	model.fit(x_train, y_train)
 	output = model.predict(x_test)
 	print('fit on test set: {:.1f}%'.format(100 * metric_train(output, y_test)))
 	print('fit on training set: {:.1f}%'.format(100 * metric_train(model.predict(x_train), y_train)))
 	print('')
+	if debug:
+		print(output)
 
 def kf_test_model(kf, model, x, y):
 	for (train, test) in kf.split(x):
@@ -54,10 +56,12 @@ def enum_country(data):
 
 # transforms wind forecasts into right dimensions (reasoning is that wind forecasts would represent net flow of volume, while
 # wind turbines roughly generate energy based on area, so we cube root wind and then square it)
-def make_wind_sqcb(data):
+def make_wind_sqcb(data, drop_wind=True):
     df = data.copy()
     df['DE_WIND_SQCB'] = (df['DE_WIND'] - df['DE_WIND'].min()).pow(2.0/3.0)
     df['FR_WIND_SQCB'] = (df['FR_WIND'] - df['FR_WIND'].min()).pow(2.0/3.0)
+    if drop_wind:
+    	df = df.drop(['DE_WIND', 'FR_WIND'], axis=1)
     return df
 
 # determines over- or underproduction of wind power based on forecasts
