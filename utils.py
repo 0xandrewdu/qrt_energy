@@ -29,14 +29,45 @@ def metric_train(output, test):
     return  spearmanr(output, test).correlation
 
 # call whenever testing models
-def test_model(model, x_train, x_test, y_train, y_test, debug=False):
-	model.fit(x_train, y_train)
-	output = model.predict(x_test)
-	print('fit on test set: {:.1f}%'.format(100 * metric_train(output, y_test)))
-	print('fit on training set: {:.1f}%'.format(100 * metric_train(model.predict(x_train), y_train)))
-	print('')
-	if debug:
-		print(output)
+def test_model(model_0, x_train_0, x_test_0, y_train, y_test, model_1=None, x_train_1=None, x_test_1=None, detailed=False, print_output=False, graph_residuals=False):
+    model_0.fit(x_train_0, y_train)
+    train_output = model_0.predict(x_train_0)
+    test_output = model_0.predict(x_test_0)
+
+    if model_1 is not None:
+        if detailed:
+            print('model_0 fit on test set: {:.1f}%'.format(100 * metric_train(test_output, y_test)))
+            print('model_0 fit on train set: {:.1f}%'.format(100 * metric_train(train_output, y_train)))
+        if x_train_1 is None:
+            x_train_1 = x_train_0
+        if x_test_1 is None:
+            x_test_1 = x_test_0
+        train_residuals = train_output - y_train
+        test_residuals = test_output - y_test
+        model_1.fit(x_train_1, train_residuals)
+        output_train_residual = model_1.predict(x_train_1)
+        output_test_residual = model_1.predict(x_test_1)
+        if detailed:
+            print('model_1 fit on test residuals: {:.1f}%'.format(100 * metric_train(output_test_residual, test_residuals)))
+            print('model_1 fit on train residuals: {:.1f}%'.format(100 * metric_train(output_train_residual, train_residuals)))
+        train_output = train_output + output_train_residual
+        test_output = test_output + output_test_residual
+
+    print('fit on test set: {:.1f}%'.format(100 * metric_train(test_output, y_test)))
+    print('fit on training set: {:.1f}%'.format(100 * metric_train(train_output, y_train)))
+    print('')
+    if print_output:
+        print(test_output)
+    if graph_residuals:
+        plt.clf()
+        plt.figure()
+        p = sns.lineplot(x=y_test.sort_index().index, y=(test_output - y_test).sort_index())
+        p.set(xlabel='TEST RESIDUALS')
+        plt.figure()
+        p = sns.lineplot(x=y_train.sort_index().index, y=(train_output - y_train).sort_index())
+        p.set(xlabel='TRAIN RESIDUALS')
+        plt.show()
+    return train_output, test_output
 
 def kf_test_model(kf, model, x, y):
 	for (train, test) in kf.split(x):
@@ -104,6 +135,16 @@ def fuel_cost(data):
 		df[f'{country}_{fuel}_CARBON'] = df[f'{country}_{fuel}'].multiply(df['CARBON_RET'])
 	df['DE_LIGNITE_CARBON'] = df[f'DE_LIGNITE'].multiply(df['CARBON_RET'])
 	return df
+
+def fourier_features(data, freq=365, order=3, include_time=True):
+    df = data.copy()
+    time = df.index
+    k = 2 * np.pi * (1 / freq) * time
+    for i in range(1, order + 1):
+        df[f"SIN_{freq}_{i}"] = np.sin(i * k)
+        df[f"COS{freq}_{i}"] = np.cos(i * k)
+    df['TIME'] = df.index
+    return df
 
 # for fitting two part linear regression to WIND_SQCB / WINDPOW to determine excess production
 # in general, given two series and a threshold (boolean) function, the fn will split the the x and y values
