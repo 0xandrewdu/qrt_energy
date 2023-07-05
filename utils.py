@@ -101,6 +101,8 @@ def fuel_cost(data):
 	ls = ['GAS', 'COAL']
 	for country, fuel in product(COUNTRIES, ls):
 		df[f'{country}_{fuel}_COST'] = df[f'{country}_{fuel}'].multiply(df[f'{fuel}_RET'])
+		df[f'{country}_{fuel}_CARBON'] = df[f'{country}_{fuel}'].multiply(df['CARBON_RET'])
+	df['DE_LIGNITE_CARBON'] = df[f'DE_LIGNITE'].multiply(df['CARBON_RET'])
 	return df
 
 # for fitting two part linear regression to WIND_SQCB / WINDPOW to determine excess production
