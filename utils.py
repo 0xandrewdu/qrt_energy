@@ -47,6 +47,14 @@ def test_model(model_0, x_train_0, x_test_0, y_train, y_test, model_1=None, x_tr
 		model_1.fit(x_train_1, train_residuals)
 		output_train_residual = model_1.predict(x_train_1)
 		output_test_residual = model_1.predict(x_test_1)
+		if graph_residuals:
+			plt.clf()
+			plt.figure()
+			p = sns.lineplot(x=y_test.sort_index().index, y=test_residuals.sort_index())
+			p.set(xlabel='MODEL 0 TEST RESIDUALS')
+			plt.figure()
+			p = sns.lineplot(x=y_train.sort_index().index, y=train_residuals.sort_index())
+			p.set(xlabel='MODEL 0 TRAIN RESIDUALS')
 		if detailed:
 			print('model_1 fit on test residuals: {:.1f}%'.format(100 * metric_train(output_test_residual, test_residuals)))
 			print('model_1 fit on train residuals: {:.1f}%'.format(100 * metric_train(output_train_residual, train_residuals)))
