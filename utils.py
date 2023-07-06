@@ -14,9 +14,15 @@ from sklearn import linear_model
 from sklearn.cluster import KMeans
 from sklearn.neural_network import MLPRegressor
 from sklearn.decomposition import PCA
+from sklearn.model_selection import KFold
+from statsmodels.tsa.deterministic import DeterministicProcess
+from sklearn.metrics import mean_absolute_percentage_error as mape
 import xgboost as xgb
 import lightgbm as lgb
 from itertools import product
+from scipy import signal
+from scipy import stats
+from statsmodels.tsa.deterministic import Fourier
 
 COUNTRIES = ['DE', 'FR']
 
@@ -25,11 +31,14 @@ def make_features(data):
 	df = basic_clean(df)
 
 # training metric
-def metric_train(output, test):
-	return  spearmanr(output, test).correlation
+def metric_train(output, test, method='spearman'):
+	if method == 'mape':
+		print(f'mape score: {mape(output, test)}')
+		return 0
+	return spearmanr(output, test).correlation
 
 # call whenever testing models
-def test_model(model_0, x_train_0, x_test_0, y_train, y_test, model_1=None, x_train_1=None, x_test_1=None, detailed=False, print_output=False, graph_residuals=False):
+def test_model(model_0, x_train_0, x_test_0, y_train, y_test, model_1=None, x_train_1=None, x_test_1=None, detailed=False, print_output=False, graph_residuals=False, method='spearman'):
 	model_0.fit(x_train_0, y_train)
 	train_output = model_0.predict(x_train_0)
 	test_output = model_0.predict(x_test_0)
@@ -50,16 +59,17 @@ def test_model(model_0, x_train_0, x_test_0, y_train, y_test, model_1=None, x_tr
 		if graph_residuals:
 			plt.clf()
 			plt.figure()
-			p = sns.lineplot(x=y_test.sort_index().index, y=test_residuals.sort_index())
-			p.set(xlabel='MODEL 0 TEST RESIDUALS')
+			fig, ax = plt.subplots(2)
+			p = sns.lineplot(x=y_test.sort_index().index, y=test_residuals.sort_index(), ax=ax[0])
+			ax[0].set_xlabel('MODEL 0 TEST RESIDUALS')
 			plt.figure()
-			p = sns.lineplot(x=y_train.sort_index().index, y=train_residuals.sort_index())
-			p.set(xlabel='MODEL 0 TRAIN RESIDUALS')
+			p = sns.lineplot(x=y_train.sort_index().index, y=train_residuals.sort_index(), ax=ax[1])
+			ax[1].set_xlabel('MODEL 0 TRAIN RESIDUALS')
 		if detailed:
-			print('model_1 fit on test residuals: {:.1f}%'.format(100 * metric_train(output_test_residual, test_residuals)))
-			print('model_1 fit on train residuals: {:.1f}%'.format(100 * metric_train(output_train_residual, train_residuals)))
-		train_output = train_output + output_train_residual
-		test_output = test_output + output_test_residual
+			print('model_1 fit on test residuals: {:.1f}%'.format(100 * metric_train(output_test_residual, test_residuals, method=method)))
+			print('model_1 fit on train residuals: {:.1f}%'.format(100 * metric_train(output_train_residual, train_residuals, method=method)))
+		train_output = train_output - output_train_residual
+		test_output = test_output - output_test_residual
 
 	print('fit on test set: {:.1f}%'.format(100 * metric_train(test_output, y_test)))
 	print('fit on training set: {:.1f}%'.format(100 * metric_train(train_output, y_train)))
@@ -77,13 +87,16 @@ def test_model(model_0, x_train_0, x_test_0, y_train, y_test, model_1=None, x_tr
 		plt.show()
 	return train_output, test_output
 
-def kf_test_model(kf, model, x, y, extra=None, wind_excess=True, target_col='TARGET'):
+def kf_test_model(kf, model, x, y, extra=None, wind_excess=True, target_col='TARGET', graph_residuals=False, method='spearman'):
 	for (train, test) in kf.split(x):
 		if wind_excess:
 			df = make_wind_excess(x, train)
 		else:
 			df = x
-		test_model(model, df.iloc[train], df.iloc[test], y.iloc[train][target_col], y.iloc[test][target_col], model_1=extra)
+		if target_col:
+			test_model(model, df.iloc[train], df.iloc[test], y.iloc[train][target_col], y.iloc[test][target_col], model_1=extra, method=method)
+		else:
+			test_model(model, df.iloc[train], df.iloc[test], y.iloc[train], y.iloc[test], model_1=extra, graph_residuals=graph_residuals, method=method)
 
 # make sure dataframe is sorted first!
 
