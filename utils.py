@@ -74,10 +74,20 @@ def kf_test_model(kf, model, x, y, extra=None):
 		df = make_wind_excess(x, train)
 		test_model(model, df.iloc[train], df.iloc[test], y.iloc[train]['TARGET'], y.iloc[test]['TARGET'], model_1=extra)
 
+# fills nan wind values by
+
+# fills nan exchange values by 
+
+# fills nan import/export (note: only france has missing exchange and imp/exp values, hence the much shittier predictions!)
+
 # fill nan values with median, drop day_id
 def basic_clean(data):
 	df = data.copy().drop('DAY_ID', axis=1)
 	return df.fillna(df.median(numeric_only=True))
+
+def drop_clean(data):
+	df = data.copy().drop('DAY_ID', axis=1)
+	return df.dropna()
 
 # factorize country column
 def enum_country(data):
