@@ -69,12 +69,26 @@ def test_model(model_0, x_train_0, x_test_0, y_train, y_test, model_1=None, x_tr
 		plt.show()
 	return train_output, test_output
 
-def kf_test_model(kf, model, x, y, extra=None):
+def kf_test_model(kf, model, x, y, extra=None, wind_excess=True, target_col='TARGET'):
 	for (train, test) in kf.split(x):
-		df = make_wind_excess(x, train)
-		test_model(model, df.iloc[train], df.iloc[test], y.iloc[train]['TARGET'], y.iloc[test]['TARGET'], model_1=extra)
+		if wind_excess:
+			df = make_wind_excess(x, train)
+		else:
+			df = x
+		test_model(model, df.iloc[train], df.iloc[test], y.iloc[train][target_col], y.iloc[test][target_col], model_1=extra)
 
-# fills nan wind values by
+# make sure dataframe is sorted first!
+
+def lag_shift(data, steps=[1]):
+	df = data.copy()
+	out = df.copy()
+	for step in steps:
+		df_shifted = df.shift(step, fill_value=0).add_suffix(f'_SHIFT_{step}')
+		out = pd.concat([out, df_shifted], axis=1)
+	return out
+
+
+# fills nan weather values by
 
 # fills nan exchange values by 
 
