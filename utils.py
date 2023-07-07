@@ -26,6 +26,26 @@ from statsmodels.tsa.deterministic import Fourier
 
 COUNTRIES = ['DE', 'FR']
 
+def time_series_test(tss, model, x, y, extra=None, wind_excess=False, graph_residuals=False, method='mape'):
+	for (train, test) in tss.split(x):
+		if wind_excess:
+			df = make_wind_excess(x, train)
+		else:
+			df = x.copy()
+		model.fit(df.iloc[train], y.iloc[train])
+		train_output, test_output = model.predict(df.iloc[train]), model.predict(df.iloc[test])
+		print(f'mape test: {mape(test_output, y.iloc[test])}')
+		print(f'mape train: {mape(train_output, y.iloc[train])}')
+		plt.figure()
+		fig, ax = plt.subplots(figsize=(16, 6))
+		sns.lineplot(x=train, y=y.iloc[train], color='blue')
+		sns.lineplot(x=test, y=y.iloc[test], color='blue')
+		sns.lineplot(x=test, y=test_output, color='orange')
+		if graph_residuals:
+			plt.figure()
+			sns.lineplot(x=test, y=test_output - y.iloc[test], color='red')
+		plt.show()
+
 def make_features(data):
 	df = data.copy()
 	df = basic_clean(df)
@@ -92,7 +112,7 @@ def kf_test_model(kf, model, x, y, extra=None, wind_excess=True, target_col='TAR
 		if wind_excess:
 			df = make_wind_excess(x, train)
 		else:
-			df = x
+			df = x.copy()
 		if target_col:
 			test_model(model, df.iloc[train], df.iloc[test], y.iloc[train][target_col], y.iloc[test][target_col], model_1=extra, method=method)
 		else:
@@ -103,6 +123,7 @@ def kf_test_model(kf, model, x, y, extra=None, wind_excess=True, target_col='TAR
 def lag_shift(data, steps=[1]):
 	df = data.copy()
 	out = df.copy()
+	idx = df.index.intersection(df.index + 1)
 	for step in steps:
 		df_shifted = df.shift(step, fill_value=0).add_suffix(f'_SHIFT_{step}')
 		out = pd.concat([out, df_shifted], axis=1)
