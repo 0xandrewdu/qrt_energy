@@ -18,13 +18,66 @@ from sklearn.model_selection import KFold
 from statsmodels.tsa.deterministic import DeterministicProcess
 from sklearn.metrics import mean_absolute_percentage_error as mape
 import xgboost as xgb
-import lightgbm as lgb
+import lightgbm as lgbm
 from itertools import product
 from scipy import signal
 from scipy import stats
 from statsmodels.tsa.deterministic import Fourier
 
 COUNTRIES = ['DE', 'FR']
+
+weather_vars = ['DE_TEMP', 'FR_TEMP', 'DE_RAIN', 'FR_RAIN', 'DE_WIND', 'FR_WIND']
+
+def fill_weather_gap(data, de_rain, de_wind, de_temp, fr_rain, fr_wind, fr_temp):
+	final = data.copy()
+	df = data.copy()
+	models = [de_temp, fr_temp, de_rain, fr_rain, de_wind, fr_wind]
+	fill_idx = df[df['DE_WIND'].isna()].index
+	left_idx = df[df.index < fill_idx.min()].index
+	right_idx = df[df.index > fill_idx.max()].index
+	n = fill_idx.size
+
+	offsets = {}
+
+	for w in weather_vars:
+		df[w] = df[w] + abs(df[w].min()) + 1
+		offsets[w] = abs(df[w].min()) + 1
+
+	extra_fourier = [Fourier(period=i, order=3) for i in [365.25]]
+	dp = DeterministicProcess(
+	    constant=True,
+	    period=52,
+	    index=df.index,
+	    order=1,
+	    fourier=3,
+	    additional_terms=extra_fourier
+	)
+
+	df = pd.concat([df, dp.in_sample()], axis=1)
+
+	# fit left side
+
+	X = df.copy()
+	lag_amt = 3
+	X = pd.concat([X, lag_shift(X[weather_vars], range(1, lag_amt), only_shifts=True)], axis=1).drop(['DAY_ID', 'COUNTRY'], axis=1)
+
+	# TODO: induce lags, features
+
+	for i in range(n):
+		for j in range(6):
+			curr_idx = fill_idx.min() + i
+			print(f'predicting row {curr_idx}, column {weather_vars[j]}...')
+			models[j].fit(X.iloc[:(curr_idx)].drop(weather_vars[j:], axis=1), X.iloc[:(curr_idx)][weather_vars[j]])
+			result = models[j].predict(np.array(X.iloc[(curr_idx)].drop(weather_vars[j:])).reshape(1, -1))
+			##### make sure to delete the line below when implementing interpolation #####
+			df.iat[curr_idx, df.columns.get_loc(weather_vars[j])] = result
+			X.iat[curr_idx, X.columns.get_loc(weather_vars[j])] = result
+			for k in range(1, lag_amt):
+				X.iat[curr_idx + k, X.columns.get_loc(f"{weather_vars[j]}_SHIFT_{k}")] = result
+	return df
+
+def make_cum_prices(data):
+	return
 
 def time_series_test(tss, model, x, y, extra=None, wind_excess=False, graph_residuals=False, method='mape'):
 	for (train, test) in tss.split(x):
@@ -37,9 +90,11 @@ def time_series_test(tss, model, x, y, extra=None, wind_excess=False, graph_resi
 		print(f'mape test: {mape(test_output, y.iloc[test])}')
 		print(f'mape train: {mape(train_output, y.iloc[train])}')
 		plt.figure()
+		after_idx = y.loc[~y.index.isin(train)].index.intersection(y.loc[~y.index.isin(test)].index)
 		fig, ax = plt.subplots(figsize=(16, 6))
+		sns.lineplot(x=after_idx, y=y.iloc[after_idx], color='red')
 		sns.lineplot(x=train, y=y.iloc[train], color='blue')
-		sns.lineplot(x=test, y=y.iloc[test], color='blue')
+		# sns.lineplot(x=test, y=y.iloc[test], color='blue')
 		sns.lineplot(x=test, y=test_output, color='orange')
 		if graph_residuals:
 			plt.figure()
@@ -120,10 +175,11 @@ def kf_test_model(kf, model, x, y, extra=None, wind_excess=True, target_col='TAR
 
 # make sure dataframe is sorted first!
 
-def lag_shift(data, steps=[1]):
+def lag_shift(data, steps=[1], only_shifts=False):
 	df = data.copy()
 	out = df.copy()
-	idx = df.index.intersection(df.index + 1)
+	if only_shifts:
+		out = pd.DataFrame(index=df.index)
 	for step in steps:
 		df_shifted = df.shift(step, fill_value=0).add_suffix(f'_SHIFT_{step}')
 		out = pd.concat([out, df_shifted], axis=1)
