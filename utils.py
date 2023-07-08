@@ -17,6 +17,7 @@ from sklearn.decomposition import PCA
 from sklearn.model_selection import KFold
 from statsmodels.tsa.deterministic import DeterministicProcess
 from sklearn.metrics import mean_absolute_percentage_error as mape
+from sklearn.metrics import mean_squared_error as mse
 import xgboost as xgb
 import lightgbm as lgbm
 from itertools import product
@@ -74,6 +75,8 @@ def fill_weather_gap(data, de_rain, de_wind, de_temp, fr_rain, fr_wind, fr_temp)
 			X.iat[curr_idx, X.columns.get_loc(weather_vars[j])] = result
 			for k in range(1, lag_amt):
 				X.iat[curr_idx + k, X.columns.get_loc(f"{weather_vars[j]}_SHIFT_{k}")] = result
+			if curr_idx in range(472, 477):
+				print(models[j].coef_)
 	return df
 
 def make_cum_prices(data):
@@ -89,6 +92,8 @@ def time_series_test(tss, model, x, y, extra=None, wind_excess=False, graph_resi
 		train_output, test_output = model.predict(df.iloc[train]), model.predict(df.iloc[test])
 		print(f'mape test: {mape(test_output, y.iloc[test])}')
 		print(f'mape train: {mape(train_output, y.iloc[train])}')
+		print(f'mse test: {mse(test_output, y.iloc[test])}')
+		print(f'mse train: {mse(train_output, y.iloc[train])}')
 		plt.figure()
 		after_idx = y.loc[~y.index.isin(train)].index.intersection(y.loc[~y.index.isin(test)].index)
 		fig, ax = plt.subplots(figsize=(16, 6))
