@@ -92,7 +92,7 @@ def time_series_test(tss, model, x, y, extra=None, wind_excess=False, graph_resi
 		train_output, test_output = model.predict(df.iloc[train]), model.predict(df.iloc[test])
 		print(f'mape test: {mape(test_output, y.iloc[test])}')
 		print(f'mape train: {mape(train_output, y.iloc[train])}')
-		print(f'mse test: {mse(test_output, y.iloc[test])}')
+		print(f'mse test: {mse(test_soutput, y.iloc[test])}')
 		print(f'mse train: {mse(train_output, y.iloc[train])}')
 		plt.figure()
 		after_idx = y.loc[~y.index.isin(train)].index.intersection(y.loc[~y.index.isin(test)].index)
@@ -248,6 +248,10 @@ def country_flow(data):
 	df['OTHER_CONSUMPTION'] = np.where(df['COUNTRY'] == 'DE', df['FR_CONSUMPTION'], df['DE_CONSUMPTION'])
 	df = df.drop(['DE_CONSUMPTION', 'FR_CONSUMPTION', 'DE_FR_EXCHANGE', 'FR_DE_EXCHANGE', 'DE_NET_EXPORT', 'DE_NET_IMPORT', 'FR_NET_EXPORT', 'FR_NET_IMPORT'], axis=1)
 	return df
+
+def normalize(data):
+	df = data.copy()
+	return (df - df.mean()) / df.std()
 
 def normalize_ret(data):
 	df = data.copy()
